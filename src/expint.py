@@ -7,6 +7,7 @@ import scipy.linalg as la
 # Special care is given to small arguments for numerical stability (e.g. 
 # expm1 instead of exp).
 
+@np.vectorize
 def phi(x):
     # phi(x) = (exp(x) - 1) / x
     if x == 0.0:
@@ -30,24 +31,34 @@ class SemilinearOdeSolver:
         self.y = y0
         self.dt = dt
 
+    def __str__(self):
+        # For pretty printing
+        return "{} solver\nt = {}\ny = {}".format(type(self).__name__, self.t, self.y)
+
 class LawsonEuler(SemilinearOdeSolver):
     def __init__(self, L, N, t0, y0, dt):
         super().__init__(L, N, t0, y0, dt)
         # Precompute matrix functions
-        self.expL = la.expm(L)
+        self.exphL = la.expm(dt*L)
 
-    def step():
-        pass
+    def step(self):
+        t, y, dt, exphL = self.t, self.y, self.dt, self.exphL
+        nl = self.N(t, y)
+        self.y = exphL @ (y + dt*nl)
+        self.t = t + dt
 
 class NorsettEuler(SemilinearOdeSolver):
     def __init__(self, L, N, t0, y0, dt):
         super().__init__(L, N, t0, y0, dt)
         # Precompute matrix functions
-        self.expL = la.expm(L)
-        self.phiL = phim(L)
+        self.exphL = la.expm(dt*L)
+        self.phihL = phim(dt*L)
 
-    def step():
-        pass
+    def step(self):
+        t, y, dt, exphL, phihL = self.t, self.y, self.dt, self.exphL, self.phihL
+        nl = self.N(t, y)
+        self.y = exphL @ y + dt * (phihL @ nl)
+        self.t = t + dt
 
 ##########################
 # Function interface for the solvers, similar to scipy.integrate.solve_ivp
