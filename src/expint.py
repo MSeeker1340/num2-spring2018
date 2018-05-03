@@ -10,8 +10,8 @@ import scipy.linalg as la
 # Alternatively, we can also use BigFloat for higher precision.
 
 @np.vectorize
-def _phi(x):
-    # phi(x) = (exp(x) - 1) / x
+def _phi1(x):
+    # phi1(x) = (exp(x) - 1) / x
     if x == 0.0:
         return 1.0
     else:
@@ -36,8 +36,8 @@ def _phi3(x):
         return (np.expm1(x) - x - 0.5*x**2) / x**3
 
 expm = la.expm
-def phim(A):
-    return la.funm(A, _phi)
+def phi1m(A):
+    return la.funm(A, _phi1)
 def phi2m(A):
     return la.funm(A, _phi2)
 def phi3m(A):
@@ -77,12 +77,54 @@ class NorsettEuler(SemilinearOdeSolver):
         super().__init__(L, N, t0, y0, dt)
         # Precompute matrix functions
         self.exphL = expm(dt*L)
-        self.phihL = phim(dt*L)
+        self.phihL = phi1m(dt*L)
 
     def step(self):
         t, y, dt, exphL, phihL = self.t, self.y, self.dt, self.exphL, self.phihL
         nl = self.N(t, y)
         self.y = exphL @ y + dt * (phihL @ nl)
+        self.t = t + dt
+
+class ExpMidpoint(SemilinearOdeSolver):
+    def __init__(self, L, N, t0, y0, dt):
+        super().__init__(L, N, t0, y0, dt)
+        # Precompute matrix functions
+        hL = dt * L
+        half_hL = dt/2 * L
+        self.E = expm(hL)
+        self.Emid = expm(half_hL)
+        self.P = phi1m(hL)
+        self.Pmid = phi1m(half_hL)
+
+    def step(self):
+        t, y, dt = self.t, self.y, self.dt
+        E, Emid, P, Pmid = self.E, self.Emid, self.P, self.Pmid
+        N1 = self.N(t, y)
+        Y2 = Emid @ y + 0.5*dt*(Pmid @ N1)
+        N2 = self.N(t + 0.5*dt, Y2)
+        self.y = E @ y + dt*(P @ N2)
+        self.t = t + dt
+
+class ExpTrapezoid(SemilinearOdeSolver):
+    def __init__(self, L, N, t0, y0, dt):
+        super().__init__(L, N, t0, y0, dt)
+        # Precompute matrix functions
+        hL = dt * L
+        self.exphL = expm(hL)
+        self.phi1hL = phi1m(hL)
+        self.phi2hL = phi2m(hL)
+
+    def step(self):
+        t, y, dt = self.t, self.y, self.dt
+        exphL, phi1hL, phi2hL = self.exphL, self.phi1hL, self.phi2hL
+        Ey = exphL @ y # exp(dt*L) * y
+        N1 = self.N(t, y)
+        P1N1 = phi1hL @ N1 # phi1(dt*L) * N1
+        P2N1 = phi2hL @ N1 # phi2(dt*L) * N1
+        Y2 = Ey + dt*P1N1
+        N2 = self.N(t+dt, Y2)
+        P2N2 = phi2hL @ N2 # phi2(dt*L) * N2
+        self.y = Ey + dt*(P1N1 - P2N1 + P2N2)
         self.t = t + dt
 
 ##########################
