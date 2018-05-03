@@ -5,18 +5,43 @@ import scipy.linalg as la
 ##########################
 # Matrix functions using scipy.linalg.funm
 # Special care is given to small arguments for numerical stability (e.g. 
-# expm1 instead of exp).
+# expm1 instead of exp and using leading order Taylor expansion when x 
+# is smaller than some threshold).
+# Alternatively, we can also use BigFloat for higher precision.
 
 @np.vectorize
-def phi(x):
+def _phi(x):
     # phi(x) = (exp(x) - 1) / x
     if x == 0.0:
         return 1.0
     else:
-        return np.expm1(x)/x
+        return np.expm1(x)/x # this is stabel
 
+@np.vectorize
+def _phi2(x):
+    # phi2(x) = (exp(x) - 1 - x) / x^2
+    #         = 1/2 + 1/6x + O(x^2)
+    if np.abs(x) < 1e-7:
+        return 0.5 + 1/6*x
+    else:
+        return (np.expm1(x) - x) / x**2
+
+@np.vectorize
+def _phi3(x):
+    # phi3(x) = (exp(x) - 1 - x - 0.5x^2) / x^3
+    #         = 1/6 + 1/24*x + O(x^2)
+    if np.abs(x) < 1e-5:
+        return 1/6 + 1/24*x
+    else:
+        return (np.expm1(x) - x - 0.5*x**2) / x**3
+
+expm = la.expm
 def phim(A):
-    return la.funm(A, phi)
+    return la.funm(A, _phi)
+def phi2m(A):
+    return la.funm(A, _phi2)
+def phi3m(A):
+    return la.funm(A, _phi3)
 
 #########################
 # Integrator interface for semilinear problems
@@ -39,7 +64,7 @@ class LawsonEuler(SemilinearOdeSolver):
     def __init__(self, L, N, t0, y0, dt):
         super().__init__(L, N, t0, y0, dt)
         # Precompute matrix functions
-        self.exphL = la.expm(dt*L)
+        self.exphL = expm(dt*L)
 
     def step(self):
         t, y, dt, exphL = self.t, self.y, self.dt, self.exphL
@@ -51,7 +76,7 @@ class NorsettEuler(SemilinearOdeSolver):
     def __init__(self, L, N, t0, y0, dt):
         super().__init__(L, N, t0, y0, dt)
         # Precompute matrix functions
-        self.exphL = la.expm(dt*L)
+        self.exphL = expm(dt*L)
         self.phihL = phim(dt*L)
 
     def step(self):
