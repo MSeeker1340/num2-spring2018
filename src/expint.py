@@ -60,6 +60,7 @@ class SemilinearOdeSolver:
         # For pretty printing
         return "{} solver\nt = {}\ny = {}".format(type(self).__name__, self.t, self.y)
 
+# First order methods
 class LawsonEuler(SemilinearOdeSolver):
     def __init__(self, L, N, t0, y0, dt):
         super().__init__(L, N, t0, y0, dt)
@@ -85,6 +86,7 @@ class NorsettEuler(SemilinearOdeSolver):
         self.y = exphL @ y + dt * (phihL @ nl)
         self.t = t + dt
 
+# Second order methods
 class ExpMidpoint(SemilinearOdeSolver):
     def __init__(self, L, N, t0, y0, dt):
         super().__init__(L, N, t0, y0, dt)
@@ -125,6 +127,45 @@ class ExpTrapezoid(SemilinearOdeSolver):
         N2 = self.N(t+dt, Y2)
         P2N2 = phi2hL @ N2 # phi2(dt*L) * N2
         self.y = Ey + dt*(P1N1 - P2N1 + P2N2)
+        self.t = t + dt
+
+# Fourth order methods
+class ETDRK4(SemilinearOdeSolver):
+    def __init__(self, L, N, t0, y0, dt):
+        super().__init__(L, N, t0, y0, dt)
+        # Precompute matrix functions
+        hL = dt * L
+        half_hL = dt/2 * L
+        self.E = expm(hL)
+        self.Emid = expm(half_hL)
+        self.P1 = phi1m(hL)
+        self.P1mid = phi1m(half_hL)
+        self.P2 = phi2m(hL)
+        self.P3 = phi3m(hL)
+        self.B1 = self.P1 - 3*self.P2 + 4*self.P3
+        self.B2 = 2*self.P2 - 4*self.P3 # same as B3
+        self.B4 = 4*self.P3 - self.P2
+    
+    def step(self):
+        # Unpack variables
+        t, y, dt = self.t, self.y, self.dt
+        E, Emid = self.E, self.Emid
+        P1, P1mid, P2, P3 = self.P1, self.P1mid, self.P2, self.P3
+        B1, B2, B4 = self.B1, self.B2, self.B4
+        Ey = E @ y
+        Emidy = Emid @ y
+        # Stage 1
+        N1 = self.N(t, y)
+        # Stage 2
+        Y2 = Emidy + dt/2*(P1mid @ N1)
+        N2 = self.N(t + dt/2, Y2)
+        # Stage 3
+        Y3 = Emidy + dt/2*(P1mid @ N2)
+        N3 = self.N(t + dt/2, Y3)
+        # Stage 4
+        Y4 = Emid @ Y2 + dt/2*(P1mid @ (2*N3 - N1))
+        N4 = self.N(t + dt, Y4)
+        self.y = Ey + dt*(B1 @ N1 + B2 @ (N2 + N3) + B4 @ N4)
         self.t = t + dt
 
 ##########################
