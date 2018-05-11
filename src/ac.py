@@ -8,13 +8,13 @@ import numpy as np
 # semilinear system y'(t) = Ly(t) + N(t,y)
 
 def AllenCahn(m, D):
-	Ld = np.identity(m, dtype=None)
+	Ld = np.identity(m)
 	Ld = Ld * (-2)
 	for i in range(m-1):
 		Ld[i+1,i] = 1
 	for i in range(m-1):
 		Ld[i,i+1] = 1
-	dt = 1.0/(m+1)
-	L = D * 1/(dt**2) * Ld + np.identity(m, dtype=None)
-	N = lambda u: u**3
-	return L,N
+	dx = 1.0/(m+1)
+	L = D * 1/(dx**2) * Ld + np.identity(m)
+	N = lambda t, u: -u**3
+	return L, N
